@@ -140,6 +140,33 @@ pub trait RegisterAccess {
     fn set_init_code(data: u16);
 }
 
+/// Radio initialization hands SAR power to the PHY's power detector, which powers the SAR down
+/// between its own measurements, so conversions saturate. Like ESP-IDF, override that through
+/// `PWDET_CONF` before every conversion, since the radio rewrites it. The override is never
+/// released: the PHY keeps driving the register for its own measurements, and a write of ours
+/// at the wrong moment leaves it unable to transmit.
+///
+/// `PWDET_CONF` writes are dropped while the radio gates the modem front-end APB clock, so the
+/// clock is enabled only around the write and restored as the radio left it.
+///
+/// Backport of esp-rs/esp-hal#6412; see `s_sar_power_acquire` in ESP-IDF
+/// `components/esp_hw_support/port/esp32c6/sar_periph_ctrl.c`.
+#[cfg(esp32c6)]
+fn force_sar_power_on() {
+    // The PAC does not describe the power detector.
+    const PWDET_CONF: *mut u32 = 0x600A_0810 as *mut u32;
+    const SAR_POWER_FORCE: u32 = 1 << 24;
+    const SAR_POWER_CNTL: u32 = 1 << 23;
+
+    crate::ESP_HAL_LOCK.lock(|| {
+        let clk_conf1 = crate::peripherals::MODEM_SYSCON::regs().clk_conf1();
+        let fe_apb_clock_enabled = clk_conf1.read().clk_fe_apb_en().bit();
+        clk_conf1.modify(|_, w| w.clk_fe_apb_en().set_bit());
+        unsafe { PWDET_CONF.write_volatile(PWDET_CONF.read_volatile() | SAR_POWER_FORCE | SAR_POWER_CNTL) };
+        clk_conf1.modify(|_, w| w.clk_fe_apb_en().bit(fe_apb_clock_enabled));
+    });
+}
+
 #[cfg(adc_adc1)]
 impl RegisterAccess for crate::peripherals::ADC1<'_> {
     fn config_onetime_sample(channel: u8, attenuation: u8) {
@@ -151,6 +178,8 @@ impl RegisterAccess for crate::peripherals::ADC1<'_> {
     }
 
     fn start_onetime_sample() {
+        #[cfg(esp32c6)]
+        force_sar_power_on();
         APB_SARADC::regs()
             .onetime_sample()
             .modify(|_, w| w.onetime_start().set_bit());
