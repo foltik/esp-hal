@@ -509,6 +509,15 @@ pub(crate) fn calibrate_rtc_fast_clock() {
         FAST_CLK_SRC_CAL_CYCLES,
     );
 
+    // A failed calibration returns 0, which sleep entry divides by; fall back to the nominal
+    // period.
+    let cal_val = if cal_val == 0 {
+        let nominal_hz = clocks::rc_fast_clk_frequency() as u64;
+        ((1_000_000u64 << RtcClock::CAL_FRACT) / nominal_hz) as u32
+    } else {
+        cal_val
+    };
+
     RC_FAST_CAL_VAL.store(cal_val, core::sync::atomic::Ordering::Relaxed);
 }
 
