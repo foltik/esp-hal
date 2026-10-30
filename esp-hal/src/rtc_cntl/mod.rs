@@ -248,9 +248,13 @@ impl<'d> Rtc<'d> {
         }
     }
 
-    /// Returns the time since boot in the raw register units.
+    /// Returns the time since the last power-on reset in RTC slow clock ticks.
+    ///
+    /// Unlike [Self::time_since_power_up], the result does not depend on the slow clock
+    /// calibration, which is redone on every boot.
     #[cfg(lp_timer_driver_supported)]
-    fn time_since_boot_raw(&self) -> u64 {
+    #[instability::unstable]
+    pub fn time_since_power_up_raw(&self) -> u64 {
         time_since_boot_raw()
     }
 
@@ -260,7 +264,7 @@ impl<'d> Rtc<'d> {
     /// reset the RTC timer.
     #[cfg(lp_timer_driver_supported)]
     pub fn time_since_power_up(&self) -> Duration {
-        Duration::from_micros(crate::clock::rtc_ticks_to_us(self.time_since_boot_raw()))
+        Duration::from_micros(crate::clock::rtc_ticks_to_us(self.time_since_power_up_raw()))
     }
 
     /// Reads the current value of the boot time registers in microseconds.

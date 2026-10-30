@@ -211,7 +211,7 @@ impl<'d> LowPower<'d> {
         // value (that would count the enter/exit time twice). Instead we set an absolute
         // target of `before + slept`, measured by the always-running LP timer.
         let before_ticks = crate::time::implem::raw_counter();
-        let before = rtc.time_since_boot_raw();
+        let before = rtc.time_since_power_up_raw();
 
         let _uart0_sclk_guard = crate::system::ensure_uart0_sclk_enabled();
         let rejected = {
@@ -234,7 +234,7 @@ impl<'d> LowPower<'d> {
 
         config.finish_sleep();
 
-        let after = rtc.time_since_boot_raw();
+        let after = rtc.time_since_power_up_raw();
 
         let slept_us = crate::clock::rtc_ticks_to_us(after.wrapping_sub(before));
         let slept_ticks = crate::time::implem::us_to_ticks(slept_us);
