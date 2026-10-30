@@ -696,6 +696,9 @@ pub(crate) fn time_since_boot_raw() -> u64 {
             }
             _ => {
                 rtc.update().write(|w| w.main_timer_update().set_bit());
+                // The snapshot lands within one slow clock period; read before that and the
+                // buffer still holds the previous snapshot, even one from before a reset.
+                crate::rom::ets_delay_us(10);
             }
         }
 
